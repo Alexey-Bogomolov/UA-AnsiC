@@ -150,13 +150,6 @@ OpcUa_StatusCode OpcUa_EncodeableTypeTable_AddTypes(
     OpcUa_EncodeableTypeTable* a_pTable,
     OpcUa_EncodeableType**     a_pTypes)
 {
-    OpcUa_Int32 ii = 0;
-    OpcUa_Int32 nCount = 0;
-    OpcUa_Int32 nIndexCount = 0;
-    OpcUa_Int32 nCurrentIndex = 0;
-    OpcUa_EncodeableType* pEntries = OpcUa_Null;
-    OpcUa_EncodeableTypeTableEntry* pIndex = OpcUa_Null;
-
     OpcUa_InitializeStatus(OpcUa_Module_Serializer, "EncodeableTypeTable_AddTypes");
 
     /* check for nulls */
@@ -165,9 +158,10 @@ OpcUa_StatusCode OpcUa_EncodeableTypeTable_AddTypes(
 
     OPCUA_P_MUTEX_LOCK(a_pTable->Mutex);
 
-    nIndexCount = a_pTable->IndexCount;
+    OpcUa_Int32 nIndexCount = a_pTable->IndexCount;
 
     /* count the number new definitions */
+    OpcUa_Int32 ii = 0;
     for (ii = 0; a_pTypes[ii] != OpcUa_Null; ii++)
     {
         if (a_pTypes[ii]->TypeId != 0)
@@ -188,66 +182,71 @@ OpcUa_StatusCode OpcUa_EncodeableTypeTable_AddTypes(
 
     if (ii > 0)
     {
-        nCount = a_pTable->Count + ii;
-        nCurrentIndex = a_pTable->IndexCount;
+        OpcUa_Int32 nCount = a_pTable->Count + ii;
 
         /* reallocate the table */
-        pEntries = (OpcUa_EncodeableType*)OpcUa_ReAlloc(a_pTable->Entries, nCount*sizeof(OpcUa_EncodeableType));
+        OpcUa_EncodeableType* pEntries = (OpcUa_EncodeableType*)OpcUa_ReAlloc(a_pTable->Entries, nCount*sizeof(OpcUa_EncodeableType));
         OpcUa_GotoErrorIfAllocFailed(pEntries);
+        OpcUa_Boolean entriesReallocated = (a_pTable->Entries != pEntries);
         a_pTable->Entries = pEntries;
 
         /* reallocate the index */
-        pIndex = (OpcUa_EncodeableTypeTableEntry*)OpcUa_ReAlloc(a_pTable->Index, nIndexCount*sizeof(OpcUa_EncodeableTypeTableEntry));
+        if (entriesReallocated) 
+        {
+          a_pTable->IndexCount = 0;
+        }
+        OpcUa_EncodeableTypeTableEntry* pIndex = (OpcUa_EncodeableTypeTableEntry*)OpcUa_ReAlloc(a_pTable->Index, nIndexCount*sizeof(OpcUa_EncodeableTypeTableEntry));
         OpcUa_GotoErrorIfAllocFailed(pIndex);
         a_pTable->Index = pIndex;
 
         /* copy new definitions */
         for (ii = a_pTable->Count; ii < nCount; ii++)
         {
-            OpcUa_EncodeableType* pDst = OpcUa_Null;
-            OpcUa_EncodeableType* pSrc = OpcUa_Null;
-
-            pDst = pEntries+ii;
-            pSrc = a_pTypes[ii-a_pTable->Count];
+            OpcUa_EncodeableType* pDst = pEntries + ii;
+            OpcUa_EncodeableType* pSrc = a_pTypes[ii - a_pTable->Count];
 
             /* copy structure */
             OpcUa_MemCpy(pDst, sizeof(OpcUa_EncodeableType), pSrc, sizeof(OpcUa_EncodeableType));
-
-            /* index type id */
-            if (pDst->TypeId != 0)
-            {
-                OpcUa_EncodeableTypeTableEntry* pIndexEntry = &(pIndex[nCurrentIndex++]);
-
-                pIndexEntry->TypeId = pDst->TypeId;
-                pIndexEntry->NamespaceUri = pDst->NamespaceUri;
-                pIndexEntry->FreeUri = OpcUa_False;
-                pIndexEntry->Type = pDst;
-            }
-
-            /* index binary encoding type id */
-            if (pDst->BinaryEncodingTypeId != 0)
-            {
-                OpcUa_EncodeableTypeTableEntry* pIndexEntry = &(pIndex[nCurrentIndex++]);
-
-                pIndexEntry->TypeId = pDst->BinaryEncodingTypeId;
-                pIndexEntry->NamespaceUri = pDst->NamespaceUri;
-                pIndexEntry->FreeUri = OpcUa_False;
-                pIndexEntry->Type = pDst;
-            }
-
-            /* index xml encoding type id */
-            if (pDst->XmlEncodingTypeId != 0)
-            {
-                OpcUa_EncodeableTypeTableEntry* pIndexEntry = &(pIndex[nCurrentIndex++]);
-
-                pIndexEntry->TypeId = pDst->XmlEncodingTypeId;
-                pIndexEntry->NamespaceUri = pDst->NamespaceUri;
-                pIndexEntry->FreeUri = OpcUa_False;
-                pIndexEntry->Type = pDst;
-            }
         }
 
-        /* sort the table */
+        /* update Index table */
+        OpcUa_Int32 nCurrentIndex = a_pTable->IndexCount;
+        for (ii = entriesReallocated ? 0 : a_pTable->Count; ii < nCount; ii++)
+        {
+          OpcUa_EncodeableType* pDst = pEntries + ii;
+
+          /* index type id */
+          if (pDst->TypeId != 0) {
+            OpcUa_EncodeableTypeTableEntry* pIndexEntry = &(pIndex[nCurrentIndex++]);
+
+            pIndexEntry->TypeId = pDst->TypeId;
+            pIndexEntry->NamespaceUri = pDst->NamespaceUri;
+            pIndexEntry->FreeUri = OpcUa_False;
+            pIndexEntry->Type = pDst;
+          }
+
+          /* index binary encoding type id */
+          if (pDst->BinaryEncodingTypeId != 0) {
+            OpcUa_EncodeableTypeTableEntry* pIndexEntry = &(pIndex[nCurrentIndex++]);
+
+            pIndexEntry->TypeId = pDst->BinaryEncodingTypeId;
+            pIndexEntry->NamespaceUri = pDst->NamespaceUri;
+            pIndexEntry->FreeUri = OpcUa_False;
+            pIndexEntry->Type = pDst;
+          }
+
+          /* index xml encoding type id */
+          if (pDst->XmlEncodingTypeId != 0) {
+            OpcUa_EncodeableTypeTableEntry* pIndexEntry = &(pIndex[nCurrentIndex++]);
+
+            pIndexEntry->TypeId = pDst->XmlEncodingTypeId;
+            pIndexEntry->NamespaceUri = pDst->NamespaceUri;
+            pIndexEntry->FreeUri = OpcUa_False;
+            pIndexEntry->Type = pDst;
+          }
+        }
+
+        /* sort the Index table */
         OpcUa_QSort(pIndex, nIndexCount, sizeof(OpcUa_EncodeableTypeTableEntry), OpcUa_EncodeableType_Compare, OpcUa_Null);
 
         /* save the new table */
